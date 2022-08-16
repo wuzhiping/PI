@@ -1,0 +1,18 @@
+apiVersion: dapr.io/v1alpha1
+kind: Configuration
+metadata:
+  name: daprsystem
+  annotations:
+    dapr.io/enabled: "true"
+    dapr.io/api-token-secret: "dapr-api-token"
+spec:
+  mtls:
+    enabled: false
+  tracing:
+    enabled: true
+    exporterType: zipkin
+    samplingRate: "1"
+    expandParams: true
+    includeBody: true
+    zipkin:
+      endpointAddress: "http://redash.feg.cn:9411/api/v2/spans" 

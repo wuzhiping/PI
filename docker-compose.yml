@@ -1,0 +1,207 @@
+version: '2'
+services:
+  ngx:
+    image: shawoo/nginx-rpi
+    restart: always
+    privileged: true
+    user: root
+    volumes:
+      - /etc/hosts:/etc/hosts
+      #- ./html:/var/www/html
+    ports:
+      - 80:80
+    stdin_open: true
+    tty: true
+
+  red:
+    build: ./node-red
+    image: node-red-rpi:v2
+    restart: always
+    privileged: true
+    user: root
+    env_file:
+      - ./node-red/.env
+    volumes:
+      - ./node-red/data/:/data/
+      - /etc/hosts:/etc/hosts
+    ports:
+      - 1880:1880
+    stdin_open: true
+    tty: true
+
+#  mongodb:
+#    image: shawoo/mongodb-rpi:latest
+#    restart: always
+#    privileged: true
+#    user: root
+#    #volumes:
+#    stdin_open: true
+#    tty: true
+
+  mysql:
+    image: shawoo/mysql-rpi:latest
+    restart: always
+    privileged: true
+    user: root
+    ports:
+      - 3306:3306
+    volumes:
+      - ./data:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=100861
+    stdin_open: true
+    tty: true
+
+  scada:
+    image: shawoo/tomcat7-rpi
+    restart: always
+    privileged: true
+    user: root
+    environment:
+      - JAVA_OPTS="-Djava.library.path=/usr/lib/jni"
+    volumes:
+      #- ./catalina.sh:/opt/tomcat/bin/catalina.sh
+      - ./webapps:/opt/tomcat/webapps
+    ports:
+      - 8080:8080
+    depends_on:
+      - mysql
+    links:
+      - mysql
+    stdin_open: true
+    tty: true
+
+  postgrest:
+    image: postgrest/postgrest:v9.0.0
+    restart: always
+    privileged: true
+    user: root
+    ports:
+      - "3000:3000"
+    environment:
+      PGRST_DB_URI: postgres://axelor:axelor@postgresdb:5432/axelor
+      PGRST_DB_SCHEMA: public, dev
+      PGRST_DB_ANON_ROLE: axelor
+      PGRST_OPENAPI_SERVER_PROXY_URI: http://postgrest:3000
+    depends_on:
+      - postgresdb
+
+  postgresdb:
+    image: postgres
+    volumes:
+      - "./postgresql/data:/var/lib/postgresql/data"
+    restart: always
+    ports:
+      - "5555:5432"
+    environment:
+      POSTGRES_DB: axelor
+      POSTGRES_USER: axelor
+      POSTGRES_PASSWORD: axelor
+
+  zipkin:
+    image: "pabloromeo/zipkin-arm:zipkin-slim-arm32v7"
+    ports:
+      - "9411:9411"
+
+  placement:
+    image: "daprio/dapr:1.8.4-linux-arm"
+    command: ["./placement", "-port", "50005"]
+    ports:
+      - "50005:50005"
+
+  redisdb:
+    image: hypriot/rpi-redis
+    restart: always
+
+
+  app0x:
+    build: ./app0x
+    image: app0x
+    restart: always
+    command: /bin/bash ./start.sh
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - ./app0x/C4/:/opt/bpm/C4/
+    environment:
+      - VER=0.0.1
+      - TZ=Asia/Shanghai
+    depends_on:
+      - redisdb
+      - placement
+      - zipkin
+    ports:
+      #- "3303:3303"
+      - "3500:3500"
+      #- "50000:50000"
+  app0x-dapr:
+    image: "daprio/daprd:edge-linux-arm"
+    environment:
+      APP_API_TOKEN: "1KplVHXfD4VBrTH0au5++w=="
+    command: ["./daprd",
+     "-app-id", "app0x",
+     "-app-port", "3303",
+     "-dapr-grpc-port", "50000",
+     "-placement-host-address", "placement:50005",
+     "-components-path", "/dapr/components",
+     "-config", "/dapr/config.yaml"]
+    volumes:
+        - "./dapr/:/dapr/"
+    depends_on:
+      - app0x
+    network_mode: "service:app0x"
+
+  app01:
+    image: hypriot/rpi-busybox-httpd
+    restart: always
+    depends_on:
+      - redisdb
+      - placement
+      - zipkin
+    ports:
+      - "81:80"
+      - "3501:3500"
+      - "50010:50000"
+  app01-dapr:
+    image: "daprio/daprd:edge-linux-arm"
+    environment:
+      APP_API_TOKEN: "1KplVHXfD4VBrTH0au5++w=="
+    command: ["./daprd",
+     "-app-id", "app01",
+     "-app-port", "80",
+     "-dapr-grpc-port", "50000",
+     "-placement-host-address", "placement:50005",
+     "-components-path", "/dapr/components",
+     "-config", "/dapr/config.yaml"]
+    volumes:
+        - "./dapr/:/dapr/"
+    depends_on:
+      - app01
+    network_mode: "service:app01"
+
+  app02:
+    image: hypriot/rpi-busybox-httpd
+    restart: always
+    depends_on:
+      - redisdb
+      - placement
+      - zipkin
+    ports:
+      - "82:80"
+      - "3502:3500"
+      - "50020:50000"
+  app02-dapr:
+    image: "daprio/daprd:edge-linux-arm"
+    command: ["./daprd",
+     "-app-id", "app02",
+     "-app-port", "80",
+     "-dapr-grpc-port", "50000",
+     "-placement-host-address", "placement:50005",
+     "-components-path", "/dapr/components",
+     "-config", "/dapr/config.yaml"]
+    volumes:
+        - "./dapr/:/dapr/"
+    depends_on:
+      - app02
+    network_mode: "service:app02"
+
