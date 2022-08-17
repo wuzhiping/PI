@@ -1,0 +1,40 @@
+global request= require('request');
+global dapr = require("../../dapr.js");
+
+define Inbound {
+    header:null,
+    payload:null,
+    constructor : function(header,payload){
+        this.payload = payload;
+        this.header = header;
+    }
+}
+
+rule "state store"
+{
+   when{
+      i : Inbound 1==1;
+   }
+   then{
+      dapr.daprClient.state.get("statestore", "counter")
+                           .then (  (d)=> {
+                                            dapr.daprClient.state.save("statestore",[ { key:"counter", value: (d || 1)+1 } ]);
+                                            console.dir(d);
+                                            outBound.ct = d || 1;
+                                            next();
+                                        }
+                                 ) ;
+   }
+}
+
+rule "invok"
+{
+   when{
+      i : Inbound 1==1;
+   }
+   then{
+      dapr.daprClient.invoker.invoke("app0x" , "model/act" , dapr.HttpMethod.POST, { from:"dapr",value:"abc",temp:(new Date()).getTime() })
+                  .then(  (d)=> { console.dir(d);outBound.result = d; outBound.result.ct = outBound.ct; next()})
+                  .catch( (e)=> { console.dir(e);outBound.result = i.payload; outBound.result.ct = outBound.ct; next() });
+   }
+}
