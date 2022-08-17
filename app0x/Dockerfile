@@ -8,3 +8,5 @@ RUN npm install --loglevel verbose
 ADD start.sh /opt/bpm
 ADD bpm.js /opt/bpm/bpm.js
 Add openApi.js /opt/bpm/openApi.js
+
+RUN npm install @dapr/dapr
