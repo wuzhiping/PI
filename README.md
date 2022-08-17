@@ -36,3 +36,9 @@ rule "Stamp"
 }
 
 </pre>
+
+# host
+<pre>
+docker run --rm -it --net=host -p 3500:3500 daprio/daprd:edge ./daprd -app-id app0x xxxxx yyyyy zzzzz
+curl http://localhost:3500/v1.0/healthz
+</pre>
